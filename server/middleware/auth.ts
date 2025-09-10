@@ -42,7 +42,7 @@ export const isAuthenticated = catchAsyncErrors(
 // =====================
 // Authorize Roles
 // =====================
-export const authorizeRoles = (...roles: string[]) => {
+export const isAdmin = (...roles: string[]) => {
   return (req: CustomRequest, res: Response, next: NextFunction) => {
     if (!roles.includes(req.user?.role || "")) {
       return next(

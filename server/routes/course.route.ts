@@ -1,7 +1,8 @@
 import express from "express";
-import { uploadCourse, editCourse } from "../controllers/course.controller";
-import { isAuthenticated } from "../middleware/auth";
+import { uploadCourse, editCourse, getSingleCourse, getAllCoursesAdmin,getCourseByUser, addQuestionToCourse } from "../controllers/course.controller";
+import { isAuthenticated, isAdmin} from "../middleware/auth";
 import multer from "multer";
+import { refreshAccessToken } from "../controllers/user.controller";
 
 const router = express.Router();
 
@@ -17,5 +18,28 @@ router.post(
 );
 
 router.put("/edit-course/:id", upload.single("thumbnail"), editCourse);
+router.get("/single-course/:id", getSingleCourse);
+router.get(
+  "/admin/all",
+  isAuthenticated,
+  isAdmin("admin"),
+  getAllCoursesAdmin
+);
+
+router.get("/get-courses", isAuthenticated, isAdmin("admin"), getAllCoursesAdmin);
+router.get(
+  "/get-course-content/:id",
+  refreshAccessToken,
+  isAuthenticated,
+  getCourseByUser
+);
+
+router.put(
+  "/add-question",
+  refreshAccessToken,
+  isAuthenticated,
+  addQuestionToCourse
+);
+
 
 export default router;

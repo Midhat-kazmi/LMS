@@ -14,7 +14,7 @@ import {
 } from "../services/user.services";
 import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
-
+import { JwtPayload } from "jsonwebtoken";
 
 
 // =====================
@@ -233,44 +233,43 @@ export const getUser = catchAsyncErrors(
 // =====================
 // Refresh Access Token
 // =====================
-export const refreshAccessToken = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const { refresh_token } = req.cookies;
+
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const refresh_token = req.cookies.refresh_token as string;
 
     if (!refresh_token) {
       return next(new ErrorHandler("No refresh token provided", 401));
     }
 
-    try {
-      const decoded = jwt.verify(
-        refresh_token,
-        process.env.REFRESH_TOKEN as Secret
-      ) as { id: string };
+    const decoded = jwt.verify(
+      refresh_token,
+      process.env.REFRESH_TOKEN as string
+    ) as JwtPayload;
 
-      const user = await userModel.findById(decoded.id);
-      if (!user) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-
-      // Issue new access token
-      const newAccessToken = jwt.sign(
-        { id: user._id },
-        process.env.ACCESS_TOKEN as Secret,
-        { expiresIn: "15m" }
-      );
-
-      res.cookie("access_token", newAccessToken, accessTokenOptions);
-
-      res.status(200).json({
-        success: true,
-        access_token: newAccessToken,
-      });
-    } catch (error) {
-      return next(new ErrorHandler("Invalid or expired refresh token", 401));
+    if (!decoded) {
+      return next(new ErrorHandler("Invalid refresh token", 401));
     }
-  }
-);
 
+    // Generate new access token
+    const access_token = jwt.sign(
+      { id: decoded.id },
+      process.env.ACCESS_TOKEN as string,
+      { expiresIn: "15m" }
+    );
+
+    //  Save it for later use
+    res.locals.access_token = access_token;
+
+    next(); // continue to actual controller
+  } catch (error: any) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+};
 // =====================
 // Get User Info (from req.user via middleware)
 // =====================
