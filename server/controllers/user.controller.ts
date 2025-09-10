@@ -371,65 +371,39 @@ interface IUpdatePassword {
   oldPassword: string;
   newPassword: string;
 }
+
+// =====================
 export const updateUserPassword = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { oldPassword, newPassword } = req.body as IUpdatePassword;
-      if (!oldPassword || !newPassword) {
-        return next(new ErrorHandler("Please enter old and new password", 400));
-      }
-      const user = await userModel.findById(req.user?._id).select("+password");
-      if (user?.password === undefined) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-      const isPasswordMatch = await user.comparePassword(oldPassword);
-      if (!isPasswordMatch) {
-        return next(new ErrorHandler("Old password is incorrect", 401));
-      }
-      user.password = newPassword;
-      await user.save();
-      const userId = req.user?._id || "";
-      await redis?.set(userId, JSON.stringify(user));
-      res.status(200).json({
-        success: true,
-        message: "Password updated successfully",
-        user,
-      });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { oldPassword, newPassword } = req.body as IUpdatePassword;
+
+    if (!oldPassword || !newPassword) {
+      return next(new ErrorHandler("Please enter old and new password", 400));
     }
+
+    const user = await userModel.findById(req.user?._id).select("+password");
+    if (!user || !user.password) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    console.log("entered oldPassword:", oldPassword);
+    console.log("stored hashed password:", user.password);
+
+    const isPasswordMatch = await user.comparePassword(oldPassword);
+    if (!isPasswordMatch) {
+      return next(new ErrorHandler("Old password is incorrect", 401));
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
   }
 );
 
-// =====================
-// Admin: Get All Users
-// =====================
-export const getAllUsers = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      await getAllUsersService(res);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
-  }
-);
-
-
-// =====================
-// Admin: Update User Role
-// =====================
-export const updateUserRole = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id, role } = req.body;
-      await updateUserRoleService(res, id, role);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
-  }
-);
-
-// =====================
 // Admin: Delete User
 // =====================
 export const deleteUser = catchAsyncErrors(
