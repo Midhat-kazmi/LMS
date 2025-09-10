@@ -273,13 +273,26 @@ export const refreshAccessToken = catchAsyncErrors(
 export const getUserInfo = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as any).user?._id || "";
-      await getUserById(userId, res);
+      const userId = (req as any).user?._id;
+      if (!userId) {
+        return next(new ErrorHandler("User not authenticated", 401));
+      }
+
+      const user = await userModel.findById(userId).select("-password");
+      if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+      }
+
+      res.status(200).json({
+        success: true,
+        user,
+      });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
 );
+
 
 // =====================
 // Social Auth
@@ -309,36 +322,48 @@ export const socialAuth = catchAsyncErrors(
 // =====================
 // Update User Info
 // =====================
-interface IUpdatUserBody {
+interface IUpdateUserBody {
   name?: string;
   email?: string;
 }
-export const updateUserInfo = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { name } = req.body as IUpdatUserBody;
-      const userId = req.user?._id;
-      if (!userId) {
-        return next(new Error("User ID is undefined"));
-      }
-      const user = await userModel.findById(userId);
 
-      if (name && user) {
-        user.name = name;
-      }
+export const updateUserInfo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    console.log("updateUserInfo hit ✅");
 
-      await user?.save();
-      await redis?.set(userId, JSON.stringify(user));
-      res.status(201).json({
-        success: true,
-        user,
-      });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+    const { name, email } = req.body as IUpdateUserBody;
+    const userId = (req as any).user?._id;
+
+    console.log("req.user:", (req as any).user);
+
+    if (!userId) {
+      return next(new ErrorHandler("User ID is undefined", 400));
     }
-  }
-);
 
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      user,
+    });
+  } catch (error: any) {
+    console.error("updateUserInfo error:", error);
+    return next(new ErrorHandler(error.message, 500));
+  }
+};
 // =====================
 // Update User Password
 // =====================
