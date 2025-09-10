@@ -12,6 +12,10 @@ import {
   getUserById,
   updateUserRoleService,
 } from "../services/user.services";
+import { v2 as cloudinary } from "cloudinary";
+import streamifier from "streamifier";
+
+
 
 // =====================
 // Interfaces
@@ -333,7 +337,7 @@ export const updateUserInfo = async (
   next: NextFunction
 ) => {
   try {
-    console.log("updateUserInfo hit ✅");
+    console.log("updateUserInfo hit ");
 
     const { name, email } = req.body as IUpdateUserBody;
     const userId = (req as any).user?._id;
@@ -400,6 +404,57 @@ export const updateUserPassword = catchAsyncErrors(
     res.status(200).json({
       success: true,
       message: "Password updated successfully",
+    });
+  }
+);
+
+//Profile Picture Update
+
+
+export const updateUserProfilePicture = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const file = (req as any).file; // multer stores uploaded file here
+    const userId = req.user?._id;
+
+    if (!userId) return next(new ErrorHandler("User not authenticated", 401));
+    if (!file) return next(new ErrorHandler("Please provide a profile picture", 400));
+
+    const user = await userModel.findById(userId);
+    if (!user) return next(new ErrorHandler("User not found", 404));
+
+    // Delete old avatar from Cloudinary if exists
+    if (user.avatar?.public_id) {
+      await cloudinary.uploader.destroy(user.avatar.public_id);
+    }
+
+    // Upload new avatar to Cloudinary
+    const uploadFromBuffer = (fileBuffer: Buffer) =>
+      new Promise<any>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "avatars", width: 150, crop: "scale" },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(fileBuffer).pipe(stream);
+      });
+
+    const result = await uploadFromBuffer(file.buffer);
+
+    user.avatar = {
+      public_id: result.public_id,
+      url: result.secure_url,
+    };
+
+    await user.save();
+
+    // Update Redis cache (optional)
+    await redis.set(userId, JSON.stringify(user));
+
+    res.status(200).json({
+      success: true,
+      user,
     });
   }
 );

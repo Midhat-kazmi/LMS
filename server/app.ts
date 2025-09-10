@@ -3,10 +3,13 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import userRouter from "./routes/user.routes";
 import ErrorHandler from "./utils/ErrorHandler";
-
+import CourseRouter from "./routes/course.route";
 export const app: Application = express();
 
 // =====================
+
+
+
 // Middleware
 // =====================
 app.use(express.json()); // parse JSON bodies
@@ -22,6 +25,8 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api/v1/user", userRouter);
+
+app.use("/api/v1/course", CourseRouter);
 
 // =====================
 // Global Error Handling Middleware
