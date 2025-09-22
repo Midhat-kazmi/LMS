@@ -9,7 +9,7 @@ import path from "path";
 import ejs from "ejs";
 import sendEmail from "../utils/sendMail";
 import NotificationModel from "../models/notification.model";
-import { newOrder } from "../services/order.service";
+import { getAllOrdersService, newOrder } from "../services/order.service";
 
 export const createOrder = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -68,7 +68,7 @@ export const createOrder = catchAsyncErrors(
         return next(new ErrorHandler(error.message, 400));
       }
 
-      // ✅ Only MongoDB updates (no Redis)
+      //  Only MongoDB updates (no Redis)
       user?.courses.push(course?._id);
       await user?.save();
 
@@ -83,6 +83,18 @@ export const createOrder = catchAsyncErrors(
 
       newOrder(data, res, next);
     } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+
+// get all orders --- only Admin
+export const getAllOrders = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+    getAllOrdersService(res);
+    } catch (error:any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }

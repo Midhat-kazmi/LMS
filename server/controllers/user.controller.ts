@@ -273,24 +273,13 @@ export const refreshAccessToken = async (
 // =====================
 // Get User Info (from req.user via middleware)
 // =====================
+//get user Info
 export const getUserInfo = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as any).user?._id;
-      if (!userId) {
-        return next(new ErrorHandler("User not authenticated", 401));
-      }
-
-      const user = await userModel.findById(userId).select("-password");
-      if (!user) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-
-      res.status(200).json({
-        success: true,
-        user,
-      });
-    } catch (error: any) {
+      const userId = req.user?._id || "";
+      getUserById(userId, res);
+    } catch (error:any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
