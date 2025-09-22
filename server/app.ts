@@ -4,6 +4,11 @@ import cookieParser from "cookie-parser";
 import userRouter from "./routes/user.routes";
 import ErrorHandler from "./utils/ErrorHandler";
 import CourseRouter from "./routes/course.route";
+import orderRouter from "./routes/order.routes";
+import notificationRouter from "./routes/notification.route";
+
+
+
 export const app: Application = express();
 
 // =====================
@@ -27,6 +32,13 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api/v1/user", userRouter);
 
 app.use("/api/v1/course", CourseRouter);
+
+
+app.use("/api/v1/order", orderRouter);
+
+
+
+app.use("/api/v1/notification", notificationRouter);
 
 // =====================
 // Global Error Handling Middleware

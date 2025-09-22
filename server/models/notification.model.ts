@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+
 export interface INotification extends Document {
   user: mongoose.Types.ObjectId;
   title: string;
