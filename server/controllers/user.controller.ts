@@ -479,3 +479,20 @@ export const getAllUsers = catchAsyncErrors(
     }
   }
 );
+
+
+//Update user Role ---admin
+export const updateUserRole = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {id,role}=req.body;
+      updateUserRoleService(res,id,role);
+    } catch (error:any) {
+      return next(new ErrorHandler(error.message, 400));
+    }
+  }
+);
+
+
+
+

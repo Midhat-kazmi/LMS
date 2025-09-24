@@ -9,6 +9,7 @@ import {
   addAnswer,
   addReview,
   addReplyToReview,
+  deleteCourse,
 } from "../controllers/course.controller";
 import { isAuthenticated, isAdmin } from "../middleware/auth";
 import multer from "multer";
@@ -65,5 +66,15 @@ router.put(
   isAdmin("admin"),
   addReplyToReview
 );
+
+
+router.put(
+  "/delete-course/:id",
+  refreshAccessToken,
+  isAuthenticated,
+  isAdmin("admin"),
+  deleteCourse
+);
+
 
 export default router;

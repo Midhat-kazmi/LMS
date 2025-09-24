@@ -9,11 +9,15 @@ import {
   socialAuth,
   updateUserInfo,
   updateUserPassword,
-  updateUserProfilePicture
+  updateUserProfilePicture,
+  getAllUsers,
+  updateUserRole,
+  deleteUser
 
 } from "../controllers/user.controller";
 import { isAuthenticated } from "../middleware/auth";
 import upload  from "../middleware/multer"; 
+import { isAdmin } from "../middleware/auth";
 
 const userRouter = express.Router();
 
@@ -36,6 +40,15 @@ userRouter.put(
   upload.single("avatar"), 
   updateUserProfilePicture
 );
+
+userRouter.get("/get-users", isAuthenticated, isAdmin("admin"), getAllUsers)
+
+userRouter.get("/update-user", isAuthenticated, isAdmin("admin"), updateUserRole)
+
+
+
+userRouter.delete("/delete-user/:id", isAuthenticated, isAdmin("admin"), deleteUser)
+
 
 
 
