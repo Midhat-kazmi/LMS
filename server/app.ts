@@ -6,8 +6,8 @@ import ErrorHandler from "./utils/ErrorHandler";
 import CourseRouter from "./routes/course.route";
 import orderRouter from "./routes/order.routes";
 import notificationRouter from "./routes/notification.route";
-
-
+import analyticsRouter from "./routes/analytics.route";
+import layoutRouter from "./routes/layout.routes";
 
 export const app: Application = express();
 
@@ -39,6 +39,13 @@ app.use("/api/v1/order", orderRouter);
 
 
 app.use("/api/v1/notification", notificationRouter);
+
+
+app.use("/api/v1/analytics", analyticsRouter);
+
+app.use("/api/v1/layout", layoutRouter);
+
+
 
 // =====================
 // Global Error Handling Middleware
