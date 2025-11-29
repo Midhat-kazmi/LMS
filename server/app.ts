@@ -20,7 +20,14 @@ export const app: Application = express();
 app.use(express.json()); // parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // parse URL-encoded data
 app.use(cookieParser());
-app.use(cors({ origin: "*", credentials: true })); // adjust "origin" for your frontend
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
+
+
 
 // =====================
 // Routes

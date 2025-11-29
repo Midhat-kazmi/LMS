@@ -22,7 +22,7 @@ import { isAdmin } from "../middleware/auth";
 const userRouter = express.Router();
 
 userRouter.post("/register", registerUser);
-userRouter.post("/activate", activateUser);
+userRouter.post("/activate-user", activateUser);
 userRouter.post("/login", LoginUser);
 userRouter.post("/logout", isAuthenticated, LogoutUser);
 

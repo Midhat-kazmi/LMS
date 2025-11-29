@@ -31,18 +31,21 @@ export const refreshtokenExpiresIn = parseInt(
 // Cookie Options
 // ==============================
 export const accessTokenOptions: ITokenOptions = {
-  expires: new Date(Date.now() + accesstokenExpiresIn * 60 * 1000), // minutes
+  expires: new Date(Date.now() + accesstokenExpiresIn * 60 * 1000),
   maxAge: accesstokenExpiresIn * 60 * 1000,
   httpOnly: true,
-  sameSite: "lax",
+  sameSite: "none",
+  secure: false, // ⬅️ for localhost only
 };
 
 export const refreshTokenOptions: ITokenOptions = {
-  expires: new Date(Date.now() + refreshtokenExpiresIn * 24 * 60 * 60 * 1000), // days
+  expires: new Date(Date.now() + refreshtokenExpiresIn * 24 * 60 * 60 * 1000),
   maxAge: refreshtokenExpiresIn * 24 * 60 * 60 * 1000,
   httpOnly: true,
-  sameSite: "lax",
+  sameSite: "none",
+  secure: false, // ⬅️ for localhost only
 };
+
 
 // ==============================
 // Send Token Handler

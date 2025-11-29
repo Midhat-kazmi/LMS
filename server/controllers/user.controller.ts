@@ -16,7 +16,6 @@ import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
 import { JwtPayload } from "jsonwebtoken";
 
-
 // =====================
 // Interfaces
 // =====================
@@ -234,13 +233,9 @@ export const getUser = catchAsyncErrors(
 // Refresh Access Token
 // =====================
 
-export const refreshAccessToken = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const refresh_token = req.cookies.refresh_token as string;
+    const refresh_token = req.cookies.refresh_token;
 
     if (!refresh_token) {
       return next(new ErrorHandler("No refresh token provided", 401));
@@ -255,21 +250,30 @@ export const refreshAccessToken = async (
       return next(new ErrorHandler("Invalid refresh token", 401));
     }
 
-    // Generate new access token
+    // Create new access token
     const access_token = jwt.sign(
       { id: decoded.id },
       process.env.ACCESS_TOKEN as string,
       { expiresIn: "15m" }
     );
 
-    //  Save it for later use
-    res.locals.access_token = access_token;
+    // Send new access token cookie
+    res.cookie("access_token", access_token, {
+      httpOnly: true,
+      maxAge: 15 * 60 * 1000,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
 
-    next(); // continue to actual controller
+    return res.status(200).json({
+      success: true,
+      access_token,
+    });
   } catch (error: any) {
     return next(new ErrorHandler(error.message, 500));
   }
 };
+
 // =====================
 // Get User Info (from req.user via middleware)
 // =====================
@@ -279,12 +283,11 @@ export const getUserInfo = catchAsyncErrors(
     try {
       const userId = req.user?._id || "";
       getUserById(userId, res);
-    } catch (error:any) {
+    } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
 );
-
 
 // =====================
 // Social Auth
@@ -398,14 +401,14 @@ export const updateUserPassword = catchAsyncErrors(
 
 //Profile Picture Update
 
-
 export const updateUserProfilePicture = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     const file = (req as any).file; // multer stores uploaded file here
     const userId = req.user?._id;
 
     if (!userId) return next(new ErrorHandler("User not authenticated", 401));
-    if (!file) return next(new ErrorHandler("Please provide a profile picture", 400));
+    if (!file)
+      return next(new ErrorHandler("Please provide a profile picture", 400));
 
     const user = await userModel.findById(userId);
     if (!user) return next(new ErrorHandler("User not found", 404));
@@ -458,7 +461,7 @@ export const deleteUser = catchAsyncErrors(
         return next(new ErrorHandler("User not found", 400));
       }
       await user.deleteOne({ id });
-      await redis.del(id); 
+      await redis.del(id);
       res.status(201).json({
         success: true,
         message: "User deleted successfully.",
@@ -469,30 +472,24 @@ export const deleteUser = catchAsyncErrors(
   }
 );
 
-
 export const getAllUsers = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-    getAllUsersService(res);
-    } catch (error:any) {
+      getAllUsersService(res);
+    } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
 );
-
 
 //Update user Role ---admin
 export const updateUserRole = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const {id,role}=req.body;
-      updateUserRoleService(res,id,role);
-    } catch (error:any) {
+      const { id, role } = req.body;
+      updateUserRoleService(res, id, role);
+    } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
     }
   }
 );
-
-
-
-
