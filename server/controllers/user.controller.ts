@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from "express";
 import userModel, { IUser } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { catchAsyncErrors } from "../middleware/catchAsyncErrors";
-import jwt, { Secret } from "jsonwebtoken";
+import jwt, { Secret, JwtPayload } from "jsonwebtoken";
 import sendEmail from "../utils/sendMail";
 import { accessTokenOptions, sendToken } from "../utils/jwt";
 import redis from "../utils/redis";
@@ -14,7 +14,7 @@ import {
 } from "../services/user.services";
 import { v2 as cloudinary } from "cloudinary";
 import streamifier from "streamifier";
-import { JwtPayload } from "jsonwebtoken";
+import { CookieOptions } from "express";
 
 // =====================
 // Interfaces
@@ -36,45 +36,64 @@ interface IActivationRequest {
   activationCode: string;
 }
 
+interface ILoginRequest {
+  email: string;
+  password: string;
+}
+
+interface AuthenticatedRequest extends Request {
+  user?: IUser;
+}
+
+interface ISocialAuthBody {
+  email: string;
+  name: string;
+  avatar: string;
+}
+
+interface IUpdateUserBody {
+  name?: string;
+  email?: string;
+}
+
+interface IUpdatePassword {
+  oldPassword: string;
+  newPassword: string;
+}
+
 // =====================
 // Register User
 // =====================
 export const registerUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
+    const { name, email, password, avatar } = req.body as IRegistrationBody;
+
+    const isEmailExist = await userModel.findOne({ email });
+    if (isEmailExist) {
+      return next(new ErrorHandler("Email already exists!", 400));
+    }
+
+    const user: IRegistrationBody = { name, email, password, avatar };
+    const activationToken = createActivationToken(user);
+    const activationCode = activationToken.activationCode;
+    const data = { user: { name: user.name }, activationCode };
+
     try {
-      const { name, email, password, avatar } = req.body;
+      await sendEmail({
+        email: user.email,
+        subject: "Activate your account",
+        template: "activation-mail.ejs",
+        data,
+      });
 
-      const isEmailExist = await userModel.findOne({ email });
-      if (isEmailExist) {
-        return next(new ErrorHandler("Email already exists!", 400));
-      }
-
-      const user: IRegistrationBody = { name, email, password, avatar };
-
-      const activationToken = createActivationToken(user);
-      const activationCode = activationToken.activationCode;
-
-      const data = { user: { name: user.name }, activationCode };
-
-      try {
-        await sendEmail({
-          email: user.email,
-          subject: "Activate your account",
-          template: "activation-mail.ejs",
-          data,
-        });
-
-        res.status(201).json({
-          success: true,
-          message: `Please check your email ${user.email} to activate your account`,
-          activationToken: activationToken.token,
-          activationCode,
-        });
-      } catch (error: any) {
-        return next(new ErrorHandler(error.message, 400));
-      }
+      res.status(201).json({
+        success: true,
+        message: `Please check your email ${user.email} to activate your account`,
+        activationToken: activationToken.token,
+        activationCode,
+      });
     } catch (error: any) {
-      next(new ErrorHandler(error.message, 400));
+      return next(new ErrorHandler(error.message, 400));
     }
   }
 );
@@ -101,324 +120,230 @@ export const createActivationToken = (
 // =====================
 export const activateUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { activationToken, activationCode } =
-        req.body as IActivationRequest;
+    const { activationToken, activationCode } =
+      req.body as IActivationRequest;
 
-      if (!activationToken || !activationCode) {
-        return next(
-          new ErrorHandler("Activation token and code are required", 400)
-        );
-      }
-
-      let decoded: { user: IUser; activationCode: string };
-
-      try {
-        decoded = jwt.verify(
-          activationToken,
-          process.env.ACTIVATION_SECRET as Secret
-        ) as { user: IUser; activationCode: string };
-      } catch (err) {
-        return next(new ErrorHandler("Invalid or expired token", 400));
-      }
-
-      if (decoded.activationCode !== activationCode) {
-        return next(new ErrorHandler("Invalid activation code", 400));
-      }
-
-      const { name, email, password } = decoded.user;
-      const existUser = await userModel.findOne({ email });
-      if (existUser) {
-        return next(new ErrorHandler("Email already exists", 400));
-      }
-
-      await userModel.create({ name, email, password });
-
-      res.status(201).json({
-        success: true,
-        message: "User activated successfully",
-      });
-    } catch (error: any) {
-      next(new ErrorHandler(error.message, 400));
+    if (!activationToken || !activationCode) {
+      return next(
+        new ErrorHandler("Activation token and code are required", 400)
+      );
     }
+
+    let decoded: { user: IUser; activationCode: string };
+
+    try {
+      decoded = jwt.verify(
+        activationToken,
+        process.env.ACTIVATION_SECRET as Secret
+      ) as { user: IUser; activationCode: string };
+    } catch (err) {
+      return next(new ErrorHandler("Invalid or expired token", 400));
+    }
+
+    if (decoded.activationCode !== activationCode) {
+      return next(new ErrorHandler("Invalid activation code", 400));
+    }
+
+    const { name, email, password } = decoded.user;
+    const existUser = await userModel.findOne({ email });
+    if (existUser) {
+      return next(new ErrorHandler("Email already exists", 400));
+    }
+
+    await userModel.create({ name, email, password });
+
+    res.status(201).json({
+      success: true,
+      message: "User activated successfully",
+    });
   }
 );
 
 // =====================
 // Login User
 // =====================
-interface ILoginRequest {
-  email: string;
-  password: string;
-}
 export const LoginUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email, password } = req.body as ILoginRequest;
-      if (!email || !password) {
-        return next(new ErrorHandler("Please enter email and password", 400));
-      }
-      const user = await userModel.findOne({ email }).select("+password");
-      if (!user) {
-        return next(new ErrorHandler("Invalid email or password", 401));
-      }
-      const isPasswordMatch = await user.comparePassword(password);
-      if (!isPasswordMatch) {
-        return next(new ErrorHandler("Invalid email or password", 401));
-      }
-      sendToken(user, 200, res);
-    } catch (error: any) {
-      next(new ErrorHandler(error.message, 400));
+    const { email, password } = req.body as ILoginRequest;
+
+    if (!email || !password) {
+      return next(new ErrorHandler("Please enter email and password", 400));
     }
+
+    const user = await userModel.findOne({ email }).select("+password");
+    if (!user) return next(new ErrorHandler("Invalid email or password", 401));
+
+    const isPasswordMatch = await user.comparePassword(password);
+    if (!isPasswordMatch) return next(new ErrorHandler("Invalid email or password", 401));
+
+    sendToken(user, 200, res);
   }
 );
 
 // =====================
 // Logout User
 // =====================
-interface AuthenticatedRequest extends Request {
-  user?: IUser;
-}
-
 export const LogoutUser = catchAsyncErrors(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      res.cookie("access_token", "", { maxAge: 1 });
-      res.cookie("refresh_token", "", { maxAge: 1 });
-      const userId = req.user?._id || "";
-      redis.del(userId);
-      res.status(200).json({
-        success: true,
-        message: "User logged out successfully.",
-      });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
+    res.cookie("access_token", "", { maxAge: 1 });
+    res.cookie("refresh_token", "", { maxAge: 1 });
+
+    const userId = req.user?._id;
+    if (userId) await redis.del(userId.toString());
+
+    res.status(200).json({
+      success: true,
+      message: "User logged out successfully.",
+    });
   }
 );
 
 // =====================
-// Get Current User (from access_token)
+// Get Current User
 // =====================
 export const getUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     const { access_token } = req.cookies;
 
-    if (!access_token) {
-      return next(new ErrorHandler("Not authenticated", 401));
-    }
+    if (!access_token) return next(new ErrorHandler("Not authenticated", 401));
 
+    let decoded: JwtPayload;
     try {
-      const decoded = jwt.verify(
-        access_token,
-        process.env.ACCESS_TOKEN as Secret
-      ) as { id: string };
-
-      const user = await userModel.findById(decoded.id).select("-password");
-      if (!user) {
-        return next(new ErrorHandler("User not found", 404));
-      }
-
-      res.status(200).json({
-        success: true,
-        user,
-      });
-    } catch (error) {
+      decoded = jwt.verify(access_token, process.env.ACCESS_TOKEN as Secret) as JwtPayload;
+    } catch {
       return next(new ErrorHandler("Invalid or expired token", 401));
     }
+
+    const user = await userModel.findById(decoded.id).select("-password");
+    if (!user) return next(new ErrorHandler("User not found", 404));
+
+    res.status(200).json({ success: true, user });
   }
 );
 
 // =====================
 // Refresh Access Token
 // =====================
-
-export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
-  try {
+export const refreshAccessToken = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
     const refresh_token = req.cookies.refresh_token;
+    if (!refresh_token) return next(new ErrorHandler("No refresh token provided", 401));
 
-    if (!refresh_token) {
-      return next(new ErrorHandler("No refresh token provided", 401));
+    let decoded: JwtPayload;
+    try {
+      decoded = jwt.verify(refresh_token, process.env.REFRESH_TOKEN as Secret) as JwtPayload;
+    } catch {
+      return next(new ErrorHandler("Invalid or expired refresh token", 401));
     }
 
-    const decoded = jwt.verify(
-      refresh_token,
-      process.env.REFRESH_TOKEN as string
-    ) as JwtPayload;
+    if (!decoded?.id) return next(new ErrorHandler("Invalid refresh token payload", 401));
 
-    if (!decoded) {
-      return next(new ErrorHandler("Invalid refresh token", 401));
-    }
-
-    // Create new access token
     const access_token = jwt.sign(
       { id: decoded.id },
-      process.env.ACCESS_TOKEN as string,
+      process.env.ACCESS_TOKEN as Secret,
       { expiresIn: "15m" }
     );
 
-    // Send new access token cookie
-    res.cookie("access_token", access_token, {
+    const cookieOptions: CookieOptions = {
       httpOnly: true,
       maxAge: 15 * 60 * 1000,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-    });
+    };
 
-    return res.status(200).json({
-      success: true,
-      access_token,
-    });
-  } catch (error: any) {
-    return next(new ErrorHandler(error.message, 500));
+    res.cookie("access_token", access_token, cookieOptions);
+
+    res.status(200).json({ success: true, access_token });
   }
-};
+);
 
 // =====================
-// Get User Info (from req.user via middleware)
+// Get User Info
 // =====================
-//get user Info
 export const getUserInfo = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = req.user?._id || "";
-      getUserById(userId, res);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?._id;
+    if (!userId) return next(new ErrorHandler("User not authenticated", 401));
+    getUserById(userId.toString(), res);
   }
 );
 
 // =====================
 // Social Auth
 // =====================
-interface ISocialAuthBody {
-  email: string;
-  name: string;
-  avatar: string;
-}
 export const socialAuth = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email, name, avatar } = req.body as ISocialAuthBody;
-      const user = await userModel.findOne({ email });
-      if (!user) {
-        const newUser = await userModel.create({ email, name, avatar });
-        sendToken(newUser, 200, res);
-      } else {
-        sendToken(user, 200, res);
-      }
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
+    const { email, name, avatar } = req.body as ISocialAuthBody;
+
+    let user = await userModel.findOne({ email });
+    if (!user) {
+      user = await userModel.create({ email, name, avatar });
     }
+
+    sendToken(user, 200, res);
   }
 );
 
 // =====================
 // Update User Info
 // =====================
-interface IUpdateUserBody {
-  name?: string;
-  email?: string;
-}
-
-export const updateUserInfo = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    console.log("updateUserInfo hit ");
+export const updateUserInfo = catchAsyncErrors(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?._id;
+    if (!userId) return next(new ErrorHandler("User not authenticated", 401));
 
     const { name, email } = req.body as IUpdateUserBody;
-    const userId = (req as any).user?._id;
-
-    console.log("req.user:", (req as any).user);
-
-    if (!userId) {
-      return next(new ErrorHandler("User ID is undefined", 400));
-    }
 
     const user = await userModel.findById(userId);
-    if (!user) {
-      return next(new ErrorHandler("User not found", 404));
-    }
+    if (!user) return next(new ErrorHandler("User not found", 404));
 
     if (name) user.name = name;
     if (email) user.email = email;
 
     await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "User updated successfully",
-      user,
-    });
-  } catch (error: any) {
-    console.error("updateUserInfo error:", error);
-    return next(new ErrorHandler(error.message, 500));
+    res.status(200).json({ success: true, message: "User updated successfully", user });
   }
-};
+);
+
 // =====================
 // Update User Password
-// =====================
-interface IUpdatePassword {
-  oldPassword: string;
-  newPassword: string;
-}
-
 // =====================
 export const updateUserPassword = catchAsyncErrors(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { oldPassword, newPassword } = req.body as IUpdatePassword;
 
-    if (!oldPassword || !newPassword) {
-      return next(new ErrorHandler("Please enter old and new password", 400));
-    }
+    const userId = req.user?._id;
+    if (!userId) return next(new ErrorHandler("User not authenticated", 401));
 
-    const user = await userModel.findById(req.user?._id).select("+password");
-    if (!user || !user.password) {
-      return next(new ErrorHandler("User not found", 404));
-    }
-
-    console.log("entered oldPassword:", oldPassword);
-    console.log("stored hashed password:", user.password);
+    const user = await userModel.findById(userId).select("+password");
+    if (!user || !user.password) return next(new ErrorHandler("User not found", 404));
 
     const isPasswordMatch = await user.comparePassword(oldPassword);
-    if (!isPasswordMatch) {
-      return next(new ErrorHandler("Old password is incorrect", 401));
-    }
+    if (!isPasswordMatch) return next(new ErrorHandler("Old password is incorrect", 401));
 
     user.password = newPassword;
     await user.save();
 
-    res.status(200).json({
-      success: true,
-      message: "Password updated successfully",
-    });
+    res.status(200).json({ success: true, message: "Password updated successfully" });
   }
 );
 
-//Profile Picture Update
-
+// =====================
+// Update Profile Picture
+// =====================
 export const updateUserProfilePicture = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const file = (req as any).file; // multer stores uploaded file here
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const file = (req as any).file;
     const userId = req.user?._id;
-
     if (!userId) return next(new ErrorHandler("User not authenticated", 401));
-    if (!file)
-      return next(new ErrorHandler("Please provide a profile picture", 400));
+    if (!file) return next(new ErrorHandler("Please provide a profile picture", 400));
 
     const user = await userModel.findById(userId);
     if (!user) return next(new ErrorHandler("User not found", 404));
 
-    // Delete old avatar from Cloudinary if exists
-    if (user.avatar?.public_id) {
-      await cloudinary.uploader.destroy(user.avatar.public_id);
-    }
+    if (user.avatar?.public_id) await cloudinary.uploader.destroy(user.avatar.public_id);
 
-    // Upload new avatar to Cloudinary
     const uploadFromBuffer = (fileBuffer: Buffer) =>
       new Promise<any>((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -433,63 +358,46 @@ export const updateUserProfilePicture = catchAsyncErrors(
 
     const result = await uploadFromBuffer(file.buffer);
 
-    user.avatar = {
-      public_id: result.public_id,
-      url: result.secure_url,
-    };
-
+    user.avatar = { public_id: result.public_id, url: result.secure_url };
     await user.save();
+    await redis.set(userId.toString(), JSON.stringify(user));
 
-    // Update Redis cache (optional)
-    await redis.set(userId, JSON.stringify(user));
-
-    res.status(200).json({
-      success: true,
-      user,
-    });
+    res.status(200).json({ success: true, user });
   }
 );
 
+// =====================
 // Admin: Delete User
 // =====================
 export const deleteUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-      const user = await userModel.findById(id);
-      if (!user) {
-        return next(new ErrorHandler("User not found", 400));
-      }
-      await user.deleteOne({ id });
-      await redis.del(id);
-      res.status(201).json({
-        success: true,
-        message: "User deleted successfully.",
-      });
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
+    const { id } = req.params;
+    const user = await userModel.findById(id);
+    if (!user) return next(new ErrorHandler("User not found", 400));
+
+    await user.deleteOne();
+    await redis.del(id);
+
+    res.status(201).json({ success: true, message: "User deleted successfully." });
   }
 );
 
+// =====================
+// Get All Users
+// =====================
 export const getAllUsers = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      getAllUsersService(res);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
+  async (_req: Request, res: Response, next: NextFunction) => {
+    getAllUsersService(res);
   }
 );
 
-//Update user Role ---admin
+// =====================
+// Update User Role
+// =====================
 export const updateUserRole = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id, role } = req.body;
-      updateUserRoleService(res, id, role);
-    } catch (error: any) {
-      return next(new ErrorHandler(error.message, 400));
-    }
+    const { id, role } = req.body;
+    updateUserRoleService(res, id, role);
   }
 );
+

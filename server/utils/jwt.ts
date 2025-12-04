@@ -28,24 +28,25 @@ export const refreshtokenExpiresIn = parseInt(
 );
 
 // ==============================
-// Cookie Options
+// Cookie Options (LOCAL DEVELOPMENT DEFAULTS)
 // ==============================
+
+// Important: must be "lax" + secure:false for localhost (HTTP)
 export const accessTokenOptions: ITokenOptions = {
   expires: new Date(Date.now() + accesstokenExpiresIn * 60 * 1000),
   maxAge: accesstokenExpiresIn * 60 * 1000,
   httpOnly: true,
-  sameSite: "none",
-  secure: false, // ⬅️ for localhost only
+  sameSite: "lax",
+  secure: false,
 };
 
 export const refreshTokenOptions: ITokenOptions = {
   expires: new Date(Date.now() + refreshtokenExpiresIn * 24 * 60 * 60 * 1000),
   maxAge: refreshtokenExpiresIn * 24 * 60 * 60 * 1000,
   httpOnly: true,
-  sameSite: "none",
-  secure: false, // ⬅️ for localhost only
+  sameSite: "lax",
+  secure: false,
 };
-
 
 // ==============================
 // Send Token Handler
@@ -57,10 +58,14 @@ export const sendToken = (user: IUser, statusCode: number, res: Response) => {
   // Upload session to Redis (cache)
   redis.set(user._id, JSON.stringify(user) as any);
 
-  // Only set secure to true in production
+  // Automatically upgrade cookie security in production
   if (process.env.NODE_ENV === "production") {
     accessTokenOptions.secure = true;
     refreshTokenOptions.secure = true;
+
+    // In production with SECURE cookies you MUST use sameSite: "none"
+    accessTokenOptions.sameSite = "none";
+    refreshTokenOptions.sameSite = "none";
   }
 
   // Set cookies
