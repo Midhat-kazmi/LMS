@@ -9,6 +9,8 @@ interface ITokenOptions {
   httpOnly: boolean;
   sameSite: "lax" | "strict" | "none" | undefined;
   secure?: boolean;
+  domain?: string;
+  path?: string;
 }
 
 // ==============================
@@ -27,52 +29,71 @@ export const refreshtokenExpiresIn = parseInt(
   10
 );
 
-// ==============================
-// Cookie Options (LOCAL DEVELOPMENT DEFAULTS)
-// ==============================
-
-// Important: must be "lax" + secure:false for localhost (HTTP)
-export const accessTokenOptions: ITokenOptions = {
+// ======================================================
+// BASE COOKIE OPTIONS (DEV DEFAULTS)
+// ======================================================
+export const baseAccessTokenOptions: ITokenOptions = {
   expires: new Date(Date.now() + accesstokenExpiresIn * 60 * 1000),
   maxAge: accesstokenExpiresIn * 60 * 1000,
   httpOnly: true,
   sameSite: "lax",
   secure: false,
+  domain: "localhost",
+  path: "/",
 };
 
-export const refreshTokenOptions: ITokenOptions = {
+export const baseRefreshTokenOptions: ITokenOptions = {
   expires: new Date(Date.now() + refreshtokenExpiresIn * 24 * 60 * 60 * 1000),
   maxAge: refreshtokenExpiresIn * 24 * 60 * 60 * 1000,
   httpOnly: true,
   sameSite: "lax",
   secure: false,
+  domain: "localhost",
+  path: "/",
 };
 
-// ==============================
-// Send Token Handler
-// ==============================
+// ======================================================
+// Send Token to Client
+// ======================================================
 export const sendToken = (user: IUser, statusCode: number, res: Response) => {
   const access_token = user.SignAccessToken();
   const refresh_token = user.SignRefreshToken();
 
-  // Upload session to Redis (cache)
-  redis.set(user._id, JSON.stringify(user) as any);
+  // Save user session in Redis
+  redis.set(user._id, JSON.stringify(user));
 
-  // Automatically upgrade cookie security in production
+  // Clone base options so we don't mutate them globally
+  const accessTokenOptions: ITokenOptions = { ...baseAccessTokenOptions };
+  const refreshTokenOptions: ITokenOptions = { ...baseRefreshTokenOptions };
+
+  // ====================================================
+  // PRODUCTION MODE OVERRIDES
+  // ====================================================
   if (process.env.NODE_ENV === "production") {
     accessTokenOptions.secure = true;
     refreshTokenOptions.secure = true;
 
-    // In production with SECURE cookies you MUST use sameSite: "none"
     accessTokenOptions.sameSite = "none";
     refreshTokenOptions.sameSite = "none";
+
+    accessTokenOptions.domain =
+      process.env.COOKIE_DOMAIN || baseAccessTokenOptions.domain;
+    refreshTokenOptions.domain =
+      process.env.COOKIE_DOMAIN || baseRefreshTokenOptions.domain;
+
+    accessTokenOptions.path = "/";
+    refreshTokenOptions.path = "/";
   }
 
-  // Set cookies
+  // ====================================================
+  // SET COOKIES
+  // ====================================================
   res.cookie("access_token", access_token, accessTokenOptions);
   res.cookie("refresh_token", refresh_token, refreshTokenOptions);
 
-  // Send response
+  // ====================================================
+  // SEND RESPONSE
+  // ====================================================
   res.status(statusCode).json({
     success: true,
     user,

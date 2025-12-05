@@ -5,7 +5,7 @@ import ErrorHandler from "../utils/ErrorHandler";
 import { catchAsyncErrors } from "../middleware/catchAsyncErrors";
 import jwt, { Secret, JwtPayload } from "jsonwebtoken";
 import sendEmail from "../utils/sendMail";
-import { accessTokenOptions, sendToken } from "../utils/jwt";
+import { sendToken } from "../utils/jwt";
 import redis from "../utils/redis";
 import {
   getAllUsersService,
@@ -261,12 +261,36 @@ export const refreshAccessToken = catchAsyncErrors(
 // Get User Info
 // =====================
 export const getUserInfo = catchAsyncErrors(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const userId = req.user?._id;
-    if (!userId) return next(new ErrorHandler("User not authenticated", 401));
-    getUserById(userId.toString(), res);
+  async (req: Request, res: Response, next: NextFunction) => {
+    // 1. Get token from cookies OR Authorization header
+    let access_token = req.cookies?.access_token;
+    if (!access_token && req.headers.authorization?.startsWith("Bearer ")) {
+      access_token = req.headers.authorization.split(" ")[1];
+    }
+
+    if (!access_token) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // 2. Verify token
+    let decoded: JwtPayload;
+    try {
+      decoded = jwt.verify(access_token, process.env.ACCESS_TOKEN as Secret) as JwtPayload;
+    } catch (err) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+
+    // 3. Fetch user from database
+    const user = await userModel.findById(decoded.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // 4. Return user
+    res.status(200).json({ success: true, user });
   }
 );
+
 
 // =====================
 // Social Auth

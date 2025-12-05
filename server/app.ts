@@ -61,10 +61,10 @@ app.use(
   (err: ErrorHandler, req: Request, res: Response, next: NextFunction) => {
     const statusCode = (err as any).statusCode || 500;
 
-    res.status(statusCode).json({
+    return res.status(statusCode).json({
       success: false,
       message: err.message || "Internal Server Error",
-      stack: process.env.NODE_ENV === "development" ? err.stack : undefined, // optional
+      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
   }
 );

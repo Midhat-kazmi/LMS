@@ -14,8 +14,9 @@ export const getUserById = async (id: string, res: Response) => {
     });
   }
 
-  // 2. Fallback: Fetch from DB
+  // 2. Not in cache → fetch from DB
   const user = await userModel.findById(id).select("-password");
+
   if (!user) {
     return res.status(404).json({
       success: false,
@@ -23,15 +24,16 @@ export const getUserById = async (id: string, res: Response) => {
     });
   }
 
-  // 3. Save to Redis
+  // 3. Store in Redis for next time
   await redis.set(id, JSON.stringify(user));
 
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
     user,
     source: "db",
   });
 };
+
 
 // Get all users
 export const getAllUsersService = async (res: Response) => {
