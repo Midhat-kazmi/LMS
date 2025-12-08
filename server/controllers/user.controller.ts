@@ -68,29 +68,31 @@ export const registerUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     const { name, email, password, avatar } = req.body as IRegistrationBody;
 
+    // Check if email exists
     const isEmailExist = await userModel.findOne({ email });
     if (isEmailExist) {
       return next(new ErrorHandler("Email already exists!", 400));
     }
 
+    // Create activation token
     const user: IRegistrationBody = { name, email, password, avatar };
-    const activationToken = createActivationToken(user);
-    const activationCode = activationToken.activationCode;
-    const data = { user: { name: user.name }, activationCode };
+    const { token, activationCode } = createActivationToken(user);
 
+    // Send activation email
     try {
       await sendEmail({
-        email: user.email,
+        email,
         subject: "Activate your account",
         template: "activation-mail.ejs",
-        data,
+        data: { user: { name }, activationCode },
       });
 
+      // Return token and code in snake_case for frontend
       res.status(201).json({
         success: true,
-        message: `Please check your email ${user.email} to activate your account`,
-        activationToken: activationToken.token,
-        activationCode,
+        message: `Please check your email ${email} to activate your account`,
+        activation_token: token,
+        activation_code: activationCode,
       });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
@@ -117,47 +119,54 @@ export const createActivationToken = (
 
 // =====================
 // Activate User
-// =====================
+
 export const activateUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { activationToken, activationCode } =
-      req.body as IActivationRequest;
-
-    if (!activationToken || !activationCode) {
-      return next(
-        new ErrorHandler("Activation token and code are required", 400)
-      );
-    }
-
-    let decoded: { user: IUser; activationCode: string };
-
     try {
-      decoded = jwt.verify(
-        activationToken,
+      const { activation_token, activation_code } = req.body;
+
+      if (!activation_token || !activation_code) {
+        return next(new ErrorHandler("Activation token or code missing", 400));
+      }
+
+      // Verify token
+      const decoded = jwt.verify(
+        activation_token,
         process.env.ACTIVATION_SECRET as Secret
-      ) as { user: IUser; activationCode: string };
-    } catch (err) {
-      return next(new ErrorHandler("Invalid or expired token", 400));
+      ) as { user: IRegistrationBody; activationCode: string };
+
+      // Compare OTP
+      if (decoded.activationCode !== activation_code) {
+        return next(new ErrorHandler("Invalid activation code", 400));
+      }
+
+      const { name, email, password } = decoded.user;
+
+      // Check if user already exists
+      const isEmailExist = await userModel.findOne({ email });
+      if (isEmailExist) {
+        return next(new ErrorHandler("User already exists", 400));
+      }
+
+      // Create new user
+      const newUser = await userModel.create({
+        name,
+        email,
+        password,
+        isVerified: true,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Account activated successfully",
+        user: newUser,
+      });
+    } catch (error: any) {
+      return next(new ErrorHandler(error.message, 400));
     }
-
-    if (decoded.activationCode !== activationCode) {
-      return next(new ErrorHandler("Invalid activation code", 400));
-    }
-
-    const { name, email, password } = decoded.user;
-    const existUser = await userModel.findOne({ email });
-    if (existUser) {
-      return next(new ErrorHandler("Email already exists", 400));
-    }
-
-    await userModel.create({ name, email, password });
-
-    res.status(201).json({
-      success: true,
-      message: "User activated successfully",
-    });
   }
 );
+
 
 // =====================
 // Login User
