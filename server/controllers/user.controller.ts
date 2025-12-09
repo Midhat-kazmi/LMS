@@ -19,6 +19,8 @@ import { CookieOptions } from "express";
 // =====================
 // Interfaces
 // =====================
+// Interfaces
+// =====================
 interface IRegistrationBody {
   name: string;
   email: string;
@@ -28,11 +30,6 @@ interface IRegistrationBody {
 
 interface IActivationToken {
   token: string;
-  activationCode: string;
-}
-
-interface IActivationRequest {
-  activationToken: string;
   activationCode: string;
 }
 
@@ -68,17 +65,14 @@ export const registerUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     const { name, email, password, avatar } = req.body as IRegistrationBody;
 
-    // Check if email exists
     const isEmailExist = await userModel.findOne({ email });
     if (isEmailExist) {
       return next(new ErrorHandler("Email already exists!", 400));
     }
 
-    // Create activation token
     const user: IRegistrationBody = { name, email, password, avatar };
     const { token, activationCode } = createActivationToken(user);
 
-    // Send activation email
     try {
       await sendEmail({
         email,
@@ -87,12 +81,12 @@ export const registerUser = catchAsyncErrors(
         data: { user: { name }, activationCode },
       });
 
-      // Return token and code in snake_case for frontend
+      // Return token and code in camelCase
       res.status(201).json({
         success: true,
         message: `Please check your email ${email} to activate your account`,
-        activation_token: token,
-        activation_code: activationCode,
+        activationToken: token,
+        activationCode,
       });
     } catch (error: any) {
       return next(new ErrorHandler(error.message, 400));
@@ -119,36 +113,32 @@ export const createActivationToken = (
 
 // =====================
 // Activate User
-
+// =====================
 export const activateUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { activation_token, activation_code } = req.body;
+      const { activationToken, activationCode } = req.body;
 
-      if (!activation_token || !activation_code) {
+      if (!activationToken || !activationCode) {
         return next(new ErrorHandler("Activation token or code missing", 400));
       }
 
-      // Verify token
       const decoded = jwt.verify(
-        activation_token,
+        activationToken,
         process.env.ACTIVATION_SECRET as Secret
       ) as { user: IRegistrationBody; activationCode: string };
 
-      // Compare OTP
-      if (decoded.activationCode !== activation_code) {
+      if (decoded.activationCode !== activationCode) {
         return next(new ErrorHandler("Invalid activation code", 400));
       }
 
       const { name, email, password } = decoded.user;
 
-      // Check if user already exists
       const isEmailExist = await userModel.findOne({ email });
       if (isEmailExist) {
         return next(new ErrorHandler("User already exists", 400));
       }
 
-      // Create new user
       const newUser = await userModel.create({
         name,
         email,
@@ -166,7 +156,6 @@ export const activateUser = catchAsyncErrors(
     }
   }
 );
-
 
 // =====================
 // Login User
@@ -204,29 +193,6 @@ export const LogoutUser = catchAsyncErrors(
       success: true,
       message: "User logged out successfully.",
     });
-  }
-);
-
-// =====================
-// Get Current User
-// =====================
-export const getUser = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const { access_token } = req.cookies;
-
-    if (!access_token) return next(new ErrorHandler("Not authenticated", 401));
-
-    let decoded: JwtPayload;
-    try {
-      decoded = jwt.verify(access_token, process.env.ACCESS_TOKEN as Secret) as JwtPayload;
-    } catch {
-      return next(new ErrorHandler("Invalid or expired token", 401));
-    }
-
-    const user = await userModel.findById(decoded.id).select("-password");
-    if (!user) return next(new ErrorHandler("User not found", 404));
-
-    res.status(200).json({ success: true, user });
   }
 );
 
