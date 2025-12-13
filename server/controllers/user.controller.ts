@@ -182,12 +182,15 @@ export const LoginUser = catchAsyncErrors(
 // Logout User
 // =====================
 export const LogoutUser = catchAsyncErrors(
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
+    // Clear cookies
     res.cookie("access_token", "", { maxAge: 1 });
     res.cookie("refresh_token", "", { maxAge: 1 });
 
-    const userId = req.user?._id;
-    if (userId) await redis.del(userId.toString());
+    // Optionally clear user from Redis if userId exists
+    // Remove this line if you want fully stateless logout
+    // const userId = (req as any).user?._id;
+    // if (userId) await redis.del(userId.toString());
 
     res.status(200).json({
       success: true,
