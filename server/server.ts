@@ -2,6 +2,8 @@ import  app  from "./app";
 import dotenv from "dotenv";
 import connectDB from "./utils/db";
 import { v2 as cloudinary } from "cloudinary";
+import { VercelRequest, VercelResponse } from "@vercel/node";
+
 
 
 dotenv.config();
@@ -14,8 +16,8 @@ cloudinary.config({
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  app(req, res);
+}
 
 connectDB();
