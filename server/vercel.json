@@ -12,5 +12,6 @@
       "dest": "/api/index.ts"
     }
   ],
-  "outputDirectory": "."
+  "outputDirectory": ".",
+  "framework": null
 }

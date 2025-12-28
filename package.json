@@ -2,11 +2,11 @@
   "name": "lms",
   "version": "1.0.0",
   "main": "server/server.ts",
-  "scripts": {
-    "dev": "vercel dev",
-    "build": "tsc",
-    "start": "vercel dev"
-  },
+ "scripts": {
+  "dev": "vercel dev",
+  "start": "vercel dev"
+}
+,
   "dependencies": {
     "@types/node-cron": "^3.0.11",
     "bcryptjs": "^3.0.2",
