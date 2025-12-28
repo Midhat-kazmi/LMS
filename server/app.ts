@@ -25,7 +25,7 @@ app.use(cookieParser());
 //  CORS (must be before routes)
 app.use(
   cors({
-    origin: "http://localhost:3000", // your frontend
+    origin: "https://client-lms-olive.vercel.app/", 
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
