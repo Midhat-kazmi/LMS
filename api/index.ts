@@ -1,8 +1,17 @@
-// api/index.ts
-import app from "../server/app"; // import your Express app
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import app from "../server/app";
 import connectDB from "../server/utils/db";
 
-connectDB();
+let isConnected = false;
 
-// No app.listen() here — Vercel handles it
-export default app;
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  if (!isConnected) {
+    await connectDB();
+    isConnected = true;
+  }
+
+  return app(req, res);
+}
