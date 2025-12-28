@@ -68,13 +68,14 @@ router.put(
 );
 
 
-router.put(
+router.delete(
   "/delete-course/:id",
   refreshAccessToken,
   isAuthenticated,
   isAdmin("admin"),
   deleteCourse
 );
+
 
 
 export default router;

@@ -12,22 +12,25 @@ import layoutRouter from "./routes/layout.routes";
 export const app: Application = express();
 
 // =====================
-
-
-
 // Middleware
 // =====================
-app.use(express.json()); // parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // parse URL-encoded data
+
+//  Body parsers with large limits for base64 images
+app.use(express.json({ limit: "10mb" })); 
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
+
+//  Cookie parser
 app.use(cookieParser());
+
+//  CORS (must be before routes)
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: "http://localhost:3000", // your frontend
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-
 
 // =====================
 // Routes
@@ -37,22 +40,11 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api/v1/user", userRouter);
-
 app.use("/api/v1/course", CourseRouter);
-
-
 app.use("/api/v1/order", orderRouter);
-
-
-
 app.use("/api/v1/notification", notificationRouter);
-
-
 app.use("/api/v1/analytics", analyticsRouter);
-
 app.use("/api/v1/layout", layoutRouter);
-
-
 
 // =====================
 // Global Error Handling Middleware
@@ -68,3 +60,4 @@ app.use(
     });
   }
 );
+

@@ -64,7 +64,7 @@ interface IUpdatePassword {
 export const registerUser = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     const { name, email, password, avatar } = req.body as IRegistrationBody;
-
+ 
     const isEmailExist = await userModel.findOne({ email });
     if (isEmailExist) {
       return next(new ErrorHandler("Email already exists!", 400));

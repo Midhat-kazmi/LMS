@@ -4,16 +4,11 @@ import userModel, { IUser } from "../models/user.model";
 import ErrorHandler from "../utils/ErrorHandler";
 import { catchAsyncErrors } from "./catchAsyncErrors";
 
-// Extend Request inline
-interface CustomRequest extends Request {
-  user?: IUser;
-}
-
 // =====================
 // Authenticate User
 // =====================
 export const isAuthenticated = catchAsyncErrors(
-  async (req: CustomRequest, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     const { access_token } = req.cookies;
 
     if (!access_token) {
@@ -31,7 +26,7 @@ export const isAuthenticated = catchAsyncErrors(
         return next(new ErrorHandler("User not found", 404));
       }
 
-      req.user = user; //  attach user to request
+      req.user = user; // globally typed
       next();
     } catch (error) {
       return next(new ErrorHandler("Invalid or expired token", 401));
@@ -43,11 +38,11 @@ export const isAuthenticated = catchAsyncErrors(
 // Authorize Roles
 // =====================
 export const isAdmin = (...roles: string[]) => {
-  return (req: CustomRequest, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!roles.includes(req.user?.role || "")) {
       return next(
         new ErrorHandler(
-          `Role: ${req.user?.role} is not allowed to access this resource`,
+          `Role: ${req.user?.role || "unknown"} is not allowed to access this resource`,
           403
         )
       );

@@ -436,21 +436,27 @@ export const addReplyToReview=catchAsyncErrors(async (req: Request, res: Respons
 
 
 
-export const deleteCourse=catchAsyncErrors(async(req: Request, res: Response, next: NextFunction)=>{
-  try {
-    const {id} =req.params ;
-    const course=await CourseModel.findById(id);
+export const deleteCourse = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+
+    const course = await CourseModel.findById(id);
     if (!course) {
-    return next(new ErrorHandler("Course not found", 400));
+      return next(new ErrorHandler("Course not found", 404));
     }
-    await course.deleteOne({id });
+
+    // delete thumbnail from cloudinary (optional but recommended)
+    if (course.thumbnail?.public_id) {
+      await cloudinary.uploader.destroy(course.thumbnail.public_id);
+    }
+
+    await course.deleteOne();
     await redis.del(id);
-    res.status(201).json({
-    success: true,
-    message: "Course deleted successfully."
-    })
-  } catch (error:any) {
-    return next(new ErrorHandler(error.message, 400));
-    }
+
+    res.status(200).json({
+      success: true,
+      message: "Course deleted successfully",
+    });
   }
-)
+);
+
