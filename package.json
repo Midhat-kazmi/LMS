@@ -2,11 +2,7 @@
   "name": "lms",
   "version": "1.0.0",
   "main": "server/server.ts",
-"scripts": {
-  "dev": "ts-node-dev --respawn --transpile-only server/server.ts",
-  "build": "tsc",
-  "start": "node dist/server/server.js"
-}
+"scripts": { "dev": "vercel dev", "start": "vercel dev" }
 
 ,
   "dependencies": {
