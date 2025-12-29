@@ -1,4 +1,5 @@
 import express from "express";
+import multer from "multer";
 import {
   uploadCourse,
   editCourse,
@@ -12,7 +13,6 @@ import {
   deleteCourse,
 } from "../controllers/course.controller";
 import { isAuthenticated, isAdmin } from "../middleware/auth";
-import multer from "multer";
 import { refreshAccessToken } from "../controllers/user.controller";
 
 const router = express.Router();
@@ -21,6 +21,9 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
+// -------------------- Routes --------------------
+
+// Create Course
 router.post(
   "/create-course",
   isAuthenticated,
@@ -28,16 +31,17 @@ router.post(
   uploadCourse
 );
 
+// Edit Course
 router.put("/edit-course/:id", upload.single("thumbnail"), editCourse);
-router.get("/single-course/:id", getSingleCourse);
-router.get("/admin/all", isAuthenticated, isAdmin("admin"), getAllCoursesAdmin);
 
-router.get(
-  "/get-courses",
-  isAuthenticated,
-  isAdmin("admin"),
-  getAllCoursesAdmin
-);
+// Get single course
+router.get("/single-course/:id", getSingleCourse);
+
+// Admin: Get all courses
+router.get("/admin/all", isAuthenticated, isAdmin("admin"), getAllCoursesAdmin);
+router.get("/get-courses", isAuthenticated, isAdmin("admin"), getAllCoursesAdmin);
+
+// User: Get course content (with refreshed token)
 router.get(
   "/get-course-content/:id",
   refreshAccessToken,
@@ -45,6 +49,7 @@ router.get(
   getCourseByUser
 );
 
+// Add question to course
 router.put(
   "/add-question",
   refreshAccessToken,
@@ -52,13 +57,23 @@ router.put(
   addQuestionToCourse
 );
 
-router.put("/add-answer", 
+// Add answer to question
+router.put(
+  "/add-answer",
   refreshAccessToken,
-   isAuthenticated,
-   addAnswer);
+  isAuthenticated,
+  addAnswer
+);
 
-router.put("/add-review/:id", refreshAccessToken, isAuthenticated, addReview);
+// Add review to course
+router.put(
+  "/add-review/:id",
+  refreshAccessToken,
+  isAuthenticated,
+  addReview
+);
 
+// Add reply to review (admin only)
 router.put(
   "/add-reply",
   refreshAccessToken,
@@ -67,7 +82,7 @@ router.put(
   addReplyToReview
 );
 
-
+// Delete course (admin only)
 router.delete(
   "/delete-course/:id",
   refreshAccessToken,
@@ -75,7 +90,5 @@ router.delete(
   isAdmin("admin"),
   deleteCourse
 );
-
-
 
 export default router;

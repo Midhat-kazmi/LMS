@@ -435,28 +435,42 @@ export const addReplyToReview=catchAsyncErrors(async (req: Request, res: Respons
 })
 
 
-
-export const deleteCourse = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
+// controllers/course.controller.ts
+export const deleteCourse = async (req: Request, res: Response, next: NextFunction) => {
+  console.log("deleteCourse start");
+  try {
     const { id } = req.params;
-
     const course = await CourseModel.findById(id);
+
     if (!course) {
       return next(new ErrorHandler("Course not found", 404));
     }
 
-    // delete thumbnail from cloudinary (optional but recommended)
+    // Non-blocking Cloudinary deletion
     if (course.thumbnail?.public_id) {
-      await cloudinary.uploader.destroy(course.thumbnail.public_id);
+      cloudinary.uploader.destroy(course.thumbnail.public_id)
+        .then(() => console.log("Cloudinary thumbnail deleted"))
+        .catch(err => console.error("Cloudinary destroy error:", err));
     }
 
+    // Delete course from DB
     await course.deleteOne();
-    await redis.del(id);
+    console.log("Course deleted from MongoDB");
+
+    // Non-blocking Redis deletion
+    redis.del(id)
+      .then(() => console.log("Redis cache cleared"))
+      .catch(err => console.error("Redis del error:", err));
 
     res.status(200).json({
       success: true,
       message: "Course deleted successfully",
+      access_token: res.locals.access_token, // include refreshed token
     });
+    console.log("deleteCourse response sent");
+  } catch (error: any) {
+    console.error("deleteCourse error:", error);
+    next(new ErrorHandler(error.message || "Internal server error", 500));
   }
-);
+};
 

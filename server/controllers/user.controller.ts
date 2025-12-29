@@ -202,38 +202,44 @@ export const LogoutUser = catchAsyncErrors(
 // =====================
 // Refresh Access Token
 // =====================
-export const refreshAccessToken = catchAsyncErrors(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const refresh_token = req.cookies.refresh_token;
-    if (!refresh_token) return next(new ErrorHandler("No refresh token provided", 401));
 
-    let decoded: JwtPayload;
-    try {
-      decoded = jwt.verify(refresh_token, process.env.REFRESH_TOKEN as Secret) as JwtPayload;
-    } catch {
-      return next(new ErrorHandler("Invalid or expired refresh token", 401));
-    }
 
-    if (!decoded?.id) return next(new ErrorHandler("Invalid refresh token payload", 401));
 
-    const access_token = jwt.sign(
-      { id: decoded.id },
-      process.env.ACCESS_TOKEN as Secret,
-      { expiresIn: "15m" }
-    );
+export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
+  console.log("refreshAccessToken start");
+  const refresh_token = req.cookies.refresh_token;
 
-    const cookieOptions: CookieOptions = {
-      httpOnly: true,
-      maxAge: 15 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    };
-
-    res.cookie("access_token", access_token, cookieOptions);
-
-    res.status(200).json({ success: true, access_token });
+  if (!refresh_token) {
+    return next(new ErrorHandler("No refresh token provided", 401));
   }
-);
+
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(refresh_token, process.env.REFRESH_TOKEN as Secret) as JwtPayload;
+  } catch {
+    return next(new ErrorHandler("Invalid or expired refresh token", 401));
+  }
+
+  const access_token = jwt.sign(
+    { id: decoded.id },
+    process.env.ACCESS_TOKEN as Secret,
+    { expiresIn: "15m" }
+  );
+
+  res.cookie("access_token", access_token, {
+    httpOnly: true,
+    maxAge: 15 * 60 * 1000,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  res.locals.access_token = access_token;
+  console.log("refreshAccessToken done, calling next()");
+  next();
+};
+
+
+
 
 // =====================
 // Get User Info
